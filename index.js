@@ -110,12 +110,17 @@
   // Exported Plugin //
 
   var mongoosePlugin = module.exports = function(schema, options) {
-    var details, encryptedFields, excludedFields, authenticatedFields, encryptionKey, signingKey, path;
+    var details, encryptedFields, excludedFields, authenticatedFields, encryptionKey, signingKey, refPaths, path;
 
     _.defaults(options, {
       middleware: true, // allow for skipping middleware with false
       requireAuthenticationCode: true, // allow for no authentication code on docs (not recommended),
       decryptPostSave: true // allow for skipping the decryption after save for improved performance
+    });
+
+    refPaths = Object.keys(schema.paths).filter(function(pathName) {
+      var path = schema.paths[pathName];
+      return !!(path && path.options && path.options.ref);
     });
 
     // Encryption Keys //
@@ -229,6 +234,17 @@
       // convert to regular object if possible in order to convert to the eventual mongo form which may be different than mongoose form
       // and only pick fields that will be authenticated
       var objectToAuthenticate = pickFieldsFromObject((doc.toObject ? doc.toObject() : doc), fields);
+      var refVal;
+
+      // convert nested populated models to _id
+      refPaths.forEach(function(refPath) {
+        refVal = mpath.get(refPath, objectToAuthenticate);
+
+        if (refVal && refVal instanceof mongoose.Document) {
+          mpath.set(refPath, refVal._id, objectToAuthenticate);
+        }
+      });
+
       var stringToAuthenticate = stableStringify(objectToAuthenticate);
       hmac.update(collectionId);
       hmac.update(version);
