@@ -282,7 +282,7 @@
 
         if (refVal &&
           (refVal instanceof mongoose.Document ||
-            (_.isObject(refVal) && !mongoose.Types.ObjectId.isValid(refVal))
+            (_.isObject(refVal) && !(refVal instanceof mongoose.Types.ObjectId))
           )
         ) {
           mpath.set(refPath, refVal._id, obj);
