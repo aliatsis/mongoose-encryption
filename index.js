@@ -1,5 +1,5 @@
 'use strict';
-(function () {
+(function() {
 
   var crypto = require('crypto');
   var _ = require('underscore');
@@ -26,23 +26,23 @@
 
   // Utility Functions //
 
-  var isEmbeddedDocument = function (doc) {
+  var isEmbeddedDocument = function(doc) {
     return doc.constructor.name === 'EmbeddedDocument';
   };
 
-  var deriveKey = function (master, type) {
+  var deriveKey = function(master, type) {
     var hmac = crypto.createHmac('sha512', master);
     hmac.update(type);
     return new Buffer(hmac.digest());
   };
 
-  var clearBuffer = function (buf) {
+  var clearBuffer = function(buf) {
     for (var i = 0; i < buf.length; i++) {
       buf[i] = 0;
     }
   };
 
-  var drop256 = function (buf) {
+  var drop256 = function(buf) {
     var buf256 = new Buffer(32);
     buf.copy(buf256, 0, 0, 32);
     clearBuffer(buf);
@@ -60,7 +60,7 @@
 
       if (nestedDoc && nestedDoc[0] && isEmbeddedDocument(nestedDoc[0])) {
         nestedDoc.forEach(function(subDoc) {
-          if (_.isFunction(subDoc.decryptSync)){
+          if (_.isFunction(subDoc.decryptSync)) {
             subDoc.decryptSync();
           }
         });
@@ -171,8 +171,8 @@
           return !pathDetails._index
         })
         .pluck('path') // get path name
-        .difference(excludedFields) // exclude excluded fields
-        .uniq()
+      .difference(excludedFields) // exclude excluded fields
+      .uniq()
         .value();
     }
 
@@ -215,7 +215,7 @@
       // HMAC-SHA512-drop-256
       var hmac = crypto.createHmac('sha512', signingKey);
 
-      if (!(fields instanceof Array)){
+      if (!(fields instanceof Array)) {
         throw new Error('fields must be an array');
       }
       if (fields.indexOf('_id') === -1) {
@@ -234,16 +234,7 @@
       // convert to regular object if possible in order to convert to the eventual mongo form which may be different than mongoose form
       // and only pick fields that will be authenticated
       var objectToAuthenticate = pickFieldsFromObject((doc.toObject ? doc.toObject() : doc), fields);
-      var refVal;
-
-      // convert nested populated models to _id
-      refPaths.forEach(function(refPath) {
-        refVal = mpath.get(refPath, objectToAuthenticate);
-
-        if (refVal && refVal instanceof mongoose.Document) {
-          mpath.set(refPath, refVal._id, objectToAuthenticate);
-        }
-      });
+      depopulateRefs(objectToAuthenticate);
 
       var stringToAuthenticate = stableStringify(objectToAuthenticate);
       hmac.update(collectionId);
@@ -258,28 +249,41 @@
 
     var authenticationFieldsToCheck = _.chain(authenticatedFields).union(['_ac']).without('_id').value(); // _id is implicitly selected
 
-    var authenticatedFieldsIsSelected = function(doc){
+    var authenticatedFieldsIsSelected = function(doc) {
       return _.map(authenticationFieldsToCheck, function(field) {
         return doc.isSelected(field);
       });
     };
 
-    var allAuthenticationFieldsSelected = function(doc){
+    var allAuthenticationFieldsSelected = function(doc) {
       var isSelected = authenticatedFieldsIsSelected(doc);
-      if (_.uniq(isSelected).length === 1){
+      if (_.uniq(isSelected).length === 1) {
         return isSelected[0];
       } else {
         return false;
       }
     };
 
-    var noAuthenticationFieldsSelected = function(doc){
+    var noAuthenticationFieldsSelected = function(doc) {
       var isSelected = authenticatedFieldsIsSelected(doc);
-      if (_.uniq(isSelected).length === 1){
+      if (_.uniq(isSelected).length === 1) {
         return isSelected[0] === false;
       } else {
         return false;
       }
+    };
+
+    var depopulateRefs = function(obj) {
+      var refVal;
+
+      // convert nested populated models to _id
+      refPaths.forEach(function(refPath) {
+        refVal = mpath.get(refPath, obj);
+
+        if (refVal && refVal instanceof mongoose.Document) {
+          mpath.set(refPath, refVal._id, obj);
+        }
+      });
     };
 
 
@@ -287,45 +291,45 @@
 
     if (options.middleware) { // defaults to true
       schema.pre('init', function(next, data) {
-          var err = null;
-          try { // this hook must be synchronous for embedded docs, so everything is synchronous for code simplicity
-            if (!isEmbeddedDocument(this)){ // don't authenticate embedded docs because there's no way to handle the error appropriately
-              if (allAuthenticationFieldsSelected(this)) {
-                this.authenticateSync.call(data, this.constructor.modelName);
-              } else {
-                if (!noAuthenticationFieldsSelected(this)){
-                  throw new Error("Authentication failed: Only some authenticated fields were selected by the query. Either all or none of the authenticated fields (" + authenticationFieldsToCheck + ") should be selected for proper authentication.");
-                }
+        var err = null;
+        try { // this hook must be synchronous for embedded docs, so everything is synchronous for code simplicity
+          if (!isEmbeddedDocument(this)) { // don't authenticate embedded docs because there's no way to handle the error appropriately
+            if (allAuthenticationFieldsSelected(this)) {
+              this.authenticateSync.call(data, this.constructor.modelName);
+            } else {
+              if (!noAuthenticationFieldsSelected(this)) {
+                throw new Error("Authentication failed: Only some authenticated fields were selected by the query. Either all or none of the authenticated fields (" + authenticationFieldsToCheck + ") should be selected for proper authentication.");
               }
             }
-            if (this.isSelected('_ct')){
-              this.decryptSync.call(data);
-            }
-          } catch (e) {
-            err = e;
           }
+          if (this.isSelected('_ct')) {
+            this.decryptSync.call(data);
+          }
+        } catch (e) {
+          err = e;
+        }
 
-          if (isEmbeddedDocument(this)) {
-            if (err) {
-              console.error(err);
-              throw err; // note: this won't actually get thrown until save, because errors in subdoc init fns are CastErrors and aren't thrown by validate()
-            }
-            this._doc = data;
-            return this;
-          } else {
-            return next(err);
+        if (isEmbeddedDocument(this)) {
+          if (err) {
+            console.error(err);
+            throw err; // note: this won't actually get thrown until save, because errors in subdoc init fns are CastErrors and aren't thrown by validate()
           }
+          this._doc = data;
+          return this;
+        } else {
+          return next(err);
+        }
       });
 
       schema.pre('save', function(next) {
         var that = this;
-        if (this.isNew || this.isSelected('_ct') ){
-          that.encrypt(function(err){
+        if (this.isNew || this.isSelected('_ct')) {
+          that.encrypt(function(err) {
             if (err) {
               next(err);
             } else {
               if ((that.isNew || allAuthenticationFieldsSelected(that)) && !isEmbeddedDocument(that)) {
-                _.forEach(authenticatedFields, function(authenticatedField){
+                _.forEach(authenticatedFields, function(authenticatedField) {
                   that.markModified(authenticatedField)
                 });
 
@@ -336,7 +340,7 @@
             }
           });
         } else if (allAuthenticationFieldsSelected(this) && !isEmbeddedDocument(this)) { // _ct is not selected but all authenticated fields are. cannot get hit in current version.
-          _.forEach(authenticatedFields, function(authenticatedField){
+          _.forEach(authenticatedFields, function(authenticatedField) {
             that.markModified(authenticatedField)
           });
 
@@ -378,6 +382,7 @@
         }
         cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, encryptionKey, iv);
         objectToEncrypt = pickFieldsFromObject(that, encryptedFields, true);
+        depopulateRefs(objectToEncrypt);
 
         jsonToEncrypt = JSON.stringify(objectToEncrypt);
 
@@ -386,7 +391,7 @@
           that._ct = Buffer.concat([VERSION_BUF, iv, cipher.read()]);
 
           // remove encrypted fields from cleartext
-          encryptedFields.forEach(function(field){
+          encryptedFields.forEach(function(field) {
             setFieldValue(field, undefined, that);
           });
 
@@ -398,7 +403,7 @@
     schema.methods.decrypt = function(cb) { // callback style but actually synchronous to allow for decryptSync without copypasta or complication
       try {
         schema.methods.decryptSync.call(this);
-      } catch(e){
+      } catch (e) {
         return cb(e);
       }
       cb();
@@ -429,9 +434,9 @@
 
           //JSON.parse returns {type: "Buffer", data: Buffer} for Buffers
           //https://nodejs.org/api/buffer.html#buffer_buf_tojson
-          if(_.isObject(decipheredVal) && decipheredVal.type === "Buffer"){
+          if (_.isObject(decipheredVal) && decipheredVal.type === "Buffer") {
             setFieldValue(field, decipheredVal.data, that);
-          }else {
+          } else {
             setFieldValue(field, decipheredVal, that);
           }
         });
@@ -456,7 +461,7 @@
     schema.methods.authenticate = function(cb) { // callback style but actually synchronous to allow for decryptSync without copypasta or complication
       try {
         schema.methods.authenticateSync.call(this);
-      } catch(e){
+      } catch (e) {
         return cb(e);
       }
       cb();
@@ -481,7 +486,7 @@
       var expectedHMAC = computeAC(this, authenticatedFieldsUsed, versionUsed, arguments[0]); // pass in modelName as argument in init hook
 
       var authentic = bufferEqual(basicAC, expectedHMAC);
-      if (!authentic){
+      if (!authentic) {
         throw new Error('Authentication failed');
       }
     };
@@ -511,28 +516,28 @@
     mongoosePlugin(schema, options); // get all instance methods
 
     schema.statics.migrateToA = function(cb) {
-      this.find({}, function(err, docs){ // find all docs in collection
+      this.find({}, function(err, docs) { // find all docs in collection
         if (err) {
           return cb(err);
         }
-        async.each(docs, function(doc, errCb){ // for each doc
+        async.each(docs, function(doc, errCb) { // for each doc
           if (doc._ac) { // don't migrate if already migrated
             return errCb();
           }
           if (doc._ct) { // if previously encrypted
             doc._ct = Buffer.concat([VERSION_BUF, doc._ct]); // append version to ciphertext
-            doc.sign(function(err){ // sign
+            doc.sign(function(err) { // sign
               if (err) {
                 return errCb(err);
               }
               return doc.save(errCb); // save
             });
           } else { // if not previously encrypted
-            doc.encrypt(function(err){ // encrypt
+            doc.encrypt(function(err) { // encrypt
               if (err) {
                 return errCb(err);
               }
-              doc.sign(function(err){ // sign
+              doc.sign(function(err) { // sign
                 if (err) {
                   return errCb(err);
                 }
@@ -545,16 +550,16 @@
     };
 
     schema.statics.migrateSubDocsToA = function(subDocField, cb) {
-      if (typeof subDocField !== 'string'){
+      if (typeof subDocField !== 'string') {
         cb(new Error('First argument must be the name of a field in which subdocuments are stored'));
       }
-      this.find({}, function(err, docs){ // find all docs in collection
+      this.find({}, function(err, docs) { // find all docs in collection
         if (err) {
           return cb(err);
         }
-        async.each(docs, function(doc, errCb){ // for each doc
+        async.each(docs, function(doc, errCb) { // for each doc
           if (doc[subDocField]) {
-            _.each(doc[subDocField], function(subDoc){ // for each subdoc
+            _.each(doc[subDocField], function(subDoc) { // for each subdoc
               if (subDoc._ct) { // if previously encrypted
                 subDoc._ct = Buffer.concat([VERSION_BUF, subDoc._ct]); // append version to ciphertext
               }
@@ -570,12 +575,12 @@
 
     // sign all the documents in a collection
     schema.statics.signAll = function(cb) {
-      this.find({}, function(err, docs){ // find all docs in collection
+      this.find({}, function(err, docs) { // find all docs in collection
         if (err) {
           return cb(err);
         }
-        async.each(docs, function(doc, errCb){ // for each doc
-          doc.sign(function(err){ // sign
+        async.each(docs, function(doc, errCb) { // for each doc
+          doc.sign(function(err) { // sign
             if (err) {
               return errCb(err);
             }
