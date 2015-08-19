@@ -280,7 +280,11 @@
       refPaths.forEach(function(refPath) {
         refVal = mpath.get(refPath, obj);
 
-        if (refVal && refVal instanceof mongoose.Document) {
+        if (refVal &&
+          (refVal instanceof mongoose.Document ||
+            (_.isObject(refVal) && !mongoose.Types.ObjectId.isValid(refVal))
+          )
+        ) {
           mpath.set(refPath, refVal._id, obj);
         }
       });
