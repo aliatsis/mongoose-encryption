@@ -1,50 +1,50 @@
 {
-    "name": "mongoose-encryption-nested",
-    "description": "Simple encryption and authentication plugin for Mongoose",
-    "version": "1.2.7",
-    "author": {
-        "name": "Joe Goldbeck"
-    },
-    "keywords": [
-        "mongoose",
-        "mongo",
-        "encrypt",
-        "encryption",
-        "sign",
-        "authenticate",
-        "authentication",
-        "mongodb",
-        "HMAC"
-    ],
-    "main": "./index.js",
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/aliatsis/mongoose-encryption.git"
-    },
-    "bugs": {
-        "url": "https://github.com/aliatsis/mongoose-encryption/issues"
-    },
-    "homepage": "https://github.com/aliatsis/mongoose-encryption",
-    "license": "MIT",
-    "dependencies": {
-        "async": "0.9.0",
-        "buffer-equal-constant-time": "1.0.1",
-        "dotty": "0.0.2",
-        "json-stable-stringify": "1.0.0",
-        "mongoose-nested": "~4.1.x",
-        "mpath": "~0.2.1",
-        "underscore": "1.5.x"
-    },
-    "devDependencies": {
-        "mocha": "1.x.x",
-        "chai": "1.x.x",
-        "coffee-script": "1.7.x",
-        "sinon": "~1.10.3"
-    },
-    "engines": {
-        "node": ">= 0.10.25"
-    },
-    "scripts": {
-        "test": "mocha ./test --compilers coffee:coffee-script/register --timeout 3000"
-    }
+  "name": "mongoose-encryption-nested",
+  "description": "Simple encryption and authentication plugin for Mongoose",
+  "version": "1.2.8",
+  "author": {
+    "name": "Joe Goldbeck"
+  },
+  "keywords": [
+    "mongoose",
+    "mongo",
+    "encrypt",
+    "encryption",
+    "sign",
+    "authenticate",
+    "authentication",
+    "mongodb",
+    "HMAC"
+  ],
+  "main": "./index.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/aliatsis/mongoose-encryption.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aliatsis/mongoose-encryption/issues"
+  },
+  "homepage": "https://github.com/aliatsis/mongoose-encryption",
+  "license": "MIT",
+  "dependencies": {
+    "async": "0.9.0",
+    "buffer-equal-constant-time": "1.0.1",
+    "dotty": "0.0.2",
+    "json-stable-stringify": "1.0.0",
+    "mongoose-nested": "~4.1.x",
+    "mpath": "~0.2.1",
+    "underscore": "1.5.x"
+  },
+  "devDependencies": {
+    "mocha": "1.x.x",
+    "chai": "1.x.x",
+    "coffee-script": "1.7.x",
+    "sinon": "~1.10.3"
+  },
+  "engines": {
+    "node": ">= 0.10.25"
+  },
+  "scripts": {
+    "test": "mocha ./test --compilers coffee:coffee-script/register --timeout 3000"
+  }
 }
