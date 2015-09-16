@@ -3,7 +3,7 @@
 
   var crypto = require('crypto');
   var _ = require('underscore');
-  var mongoose = require('mongoose-nested');
+  var mongoose = require('mongoose');
   var ObjectId = mongoose.Types.ObjectId;
   var stableStringify = require('json-stable-stringify');
   var async = require('async');

@@ -32,7 +32,7 @@ A great way to securely generate this pair of keys is `openssl rand -base64 32; 
 By default, all fields are encrypted except for `_id`, `__v`, and fields with indexes
 
 ```
-var mongoose = require('mongoose-nested');
+var mongoose = require('mongoose');
 var encrypt = require('mongoose-encryption');
 
 var userSchema = new mongoose.Schema({

@@ -31,7 +31,7 @@
     "buffer-equal-constant-time": "1.0.1",
     "dotty": "0.0.2",
     "json-stable-stringify": "1.0.0",
-    "mongoose-nested": "~4.1.x",
+    "mongoose": "~4.1.7",
     "mpath": "~0.2.1",
     "underscore": "1.5.x"
   },
