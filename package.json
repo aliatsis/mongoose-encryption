@@ -1,7 +1,7 @@
 {
   "name": "mongoose-encryption-nested",
   "description": "Simple encryption and authentication plugin for Mongoose",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "author": {
     "name": "Joe Goldbeck"
   },
