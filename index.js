@@ -106,6 +106,37 @@
     return result;
   };
 
+  var getRefPaths = function(schema) {
+    var result = [];
+    doGetRefPaths(schema, [], result);
+    return result.map(function(pathArr) {
+      return pathArr.join('.');
+    });
+  };
+
+  var doGetRefPaths = function(schema, pathArr, result) {
+    Object.keys(schema.paths).forEach(function(pathName) {
+      var path = schema.paths[pathName];
+      var pathArrCopy = pathArr.concat(pathName);
+
+      if (path && path.options) {
+        if (path.options.ref) {
+          result.push(pathArrCopy);
+        } else if (path.options.type instanceof mongoose.Schema) {
+          doGetRefPaths(path.options.type, pathArrCopy, result);
+        } else if (Array.isArray(path.options.type)) {
+          if (path.options.type[0] instanceof mongoose.Schema) {
+            doGetRefPaths(path.options.type[0], pathArrCopy, result);
+          } else if (path.options.type[0].ref) {
+            result.push(pathArrCopy);
+          }
+        }
+      } else {
+        return;
+      }
+    });
+  };
+
 
   // Exported Plugin //
 
@@ -118,10 +149,7 @@
       decryptPostSave: true // allow for skipping the decryption after save for improved performance
     });
 
-    refPaths = Object.keys(schema.paths).filter(function(pathName) {
-      var path = schema.paths[pathName];
-      return !!(path && path.options && path.options.ref);
-    });
+    refPaths = getRefPaths(schema);
 
     // Encryption Keys //
 
@@ -188,8 +216,6 @@
     }
 
 
-
-
     // Augment Schema //
 
     if (!schema.paths._ct) { // ciphertext
@@ -206,7 +232,6 @@
         }
       });
     }
-
 
 
     // Authentication Helper Functions //
@@ -273,21 +298,47 @@
       }
     };
 
-    var depopulateRefs = function(obj) {
-      var refVal;
+    var isPopulatedRefValue = function(refVal) {
+      return refVal &&
+        (refVal instanceof mongoose.Document ||
+          (_.isObject(refVal) && !(refVal instanceof mongoose.Types.ObjectId))
+        );
+    };
 
-      // convert nested populated models to _id
-      refPaths.forEach(function(refPath) {
-        refVal = mpath.get(refPath, obj);
+    var depopulateRefPath = function(obj, refPath) {
+      var tempVal = obj;
+      var tempObj, part;
 
-        if (refVal &&
-          (refVal instanceof mongoose.Document ||
-            (_.isObject(refVal) && !(refVal instanceof mongoose.Types.ObjectId))
-          )
-        ) {
-          mpath.set(refPath, refVal._id, obj);
+      if (typeof refPath === 'string') {
+        refPath = refPath.split('.');
+      }
+
+      for (var i = 0; i < refPath.length; i++) {
+        part = refPath[i];
+        tempObj = tempVal;
+        tempVal = tempObj[part];
+
+        if (Array.isArray(tempVal)) {
+          return tempVal.forEach(function(val, j) {
+            if (i === refPath.length - 1) {
+              depopulateRefPath(tempVal, [j]);
+            } else {
+              depopulateRefPath(val, refPath.slice(i + 1));
+            }
+          });
+        } else if (i === refPath.length - 1) {
+          if (isPopulatedRefValue(tempVal)) {
+            tempObj[part] = tempVal._id;
+          }
+        } else if (!tempVal) {
+          return;
         }
-      });
+      }
+    };
+
+    var depopulateRefs = function(obj) {
+      // convert nested populated models to _id
+      refPaths.forEach(depopulateRefPath.bind(null, obj));
     };
 
 
@@ -373,7 +424,6 @@
     }
 
 
-
     // Encryption Instance Methods //
 
     schema.methods.encrypt = function(cb) {
@@ -449,8 +499,6 @@
         this._ac = undefined;
       }
     };
-
-
 
 
     // Authentication Instance Methods //
