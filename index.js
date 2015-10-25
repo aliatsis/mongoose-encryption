@@ -259,9 +259,8 @@
       // convert to regular object if possible in order to convert to the eventual mongo form which may be different than mongoose form
       // and only pick fields that will be authenticated
       var objectToAuthenticate = pickFieldsFromObject((doc.toObject ? doc.toObject() : doc), fields);
-      depopulateRefs(objectToAuthenticate);
+      var stringToAuthenticate = depopulateRefs(objectToAuthenticate, stableStringify);
 
-      var stringToAuthenticate = stableStringify(objectToAuthenticate);
       hmac.update(collectionId);
       hmac.update(version);
       hmac.update(stringToAuthenticate);
@@ -305,30 +304,29 @@
         );
     };
 
-    var depopulateRefPath = function(obj, refPath) {
+    var depopulateRefPath = function(refPath, obj, setCb, partIndex) {
       var tempVal = obj;
-      var tempObj, part;
+      var tempObj, part, newRefPath;
 
       if (typeof refPath === 'string') {
         refPath = refPath.split('.');
       }
 
-      for (var i = 0; i < refPath.length; i++) {
+      for (var i = partIndex || 0; i < refPath.length; i++) {
         part = refPath[i];
         tempObj = tempVal;
         tempVal = tempObj[part];
 
         if (Array.isArray(tempVal)) {
           return tempVal.forEach(function(val, j) {
-            if (i === refPath.length - 1) {
-              depopulateRefPath(tempVal, [j]);
-            } else {
-              depopulateRefPath(val, refPath.slice(i + 1));
-            }
+            newRefPath = refPath.slice();
+            newRefPath.splice(i + 1, 0, j + '');
+            depopulateRefPath(newRefPath, tempVal, setCb, i + 1);
           });
         } else if (i === refPath.length - 1) {
           if (isPopulatedRefValue(tempVal)) {
             tempObj[part] = tempVal._id;
+            setCb(tempVal, refPath.join('.'));
           }
         } else if (!tempVal) {
           return;
@@ -336,9 +334,24 @@
       }
     };
 
-    var depopulateRefs = function(obj) {
+    var depopulateRefs = function(obj, stringifyFn) {
+      var storedPopulatedValues = {};
+
       // convert nested populated models to _id
-      refPaths.forEach(depopulateRefPath.bind(null, obj));
+      refPaths.forEach(function(refPath) {
+        depopulateRefPath(refPath, obj, function(value, fullRefPath) {
+          storedPopulatedValues[fullRefPath] = value;
+        });
+      });
+
+      var result = stringifyFn(obj);
+
+      // since nested objects can share be obj referencing with doc
+      Object.keys(storedPopulatedValues).forEach(function(key) {
+        mpath.set(key, storedPopulatedValues[key], obj);
+      });
+
+      return result;
     };
 
 
@@ -436,9 +449,7 @@
         }
         cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, encryptionKey, iv);
         objectToEncrypt = pickFieldsFromObject(that, encryptedFields, true);
-        depopulateRefs(objectToEncrypt);
-
-        jsonToEncrypt = JSON.stringify(objectToEncrypt);
+        jsonToEncrypt = depopulateRefs(objectToEncrypt, JSON.stringify);
 
         cipher.end(jsonToEncrypt, 'utf-8', function() {
           // add ciphertext to document
