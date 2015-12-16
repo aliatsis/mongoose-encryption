@@ -866,6 +866,85 @@ describe 'Array EmbeddedDocument', ->
                 assert.property doc.children[1], 'text', 'Child unencrypted text', 'Ciphertext was swapped'
                 done()
 
+    describe 'when child is encrypted and authenticated', ->
+      before ->
+        ChildModelSchema = mongoose.Schema
+          text: type: String
+
+        ChildModelSchema.plugin encrypt,
+          encryptionKey: encryptionKey
+          signingKey: signingKey
+
+        ParentModelSchema = mongoose.Schema
+          text: type: String
+          children: [ChildModelSchema]
+
+        ParentModelSchema.plugin encrypt,
+          encryptionKey: encryptionKey
+          signingKey: signingKey
+          encryptedFields: []
+          additionalAuthenticatedFields: ['children']
+
+        @ParentModel = mongoose.model 'ParentWithAuth', ParentModelSchema
+        @ChildModel = mongoose.model 'ChildWithAuth', ChildModelSchema
+
+      beforeEach (done) ->
+        @parentDoc = new @ParentModel
+          text: 'Unencrypted text'
+
+        childDoc = new @ChildModel
+          text: 'Child unencrypted text'
+
+        childDoc2 = new @ChildModel
+          text: 'Second unencrypted text'
+
+        @parentDoc.children.addToSet childDoc
+        @parentDoc.children.addToSet childDoc2
+
+        @parentDoc.save done
+
+      after (done) ->
+        @parentDoc.remove done
+
+      it 'should persist children as encrypted after removing a child', (done) ->
+        @ParentModel.findById @parentDoc._id, (err, doc) =>
+          return done(err) if err
+          assert.ok doc, 'should have found doc with encrypted children'
+
+          doc.children.id(doc.children[1]._id).remove()
+
+          doc.save (err) =>
+            return done(err) if err
+
+            @ParentModel.find
+              _id: @parentDoc._id
+              'children._ct': $exists: true
+              'children.text': $exists: false
+            , (err, docs) ->
+              return done(err) if err
+              assert.ok doc, 'should have found doc with encrypted children'
+              assert.equal doc.children.length, 1
+
+              done()
+
+      it 'should persist children as encrypted after adding a child', (done) ->
+        @ParentModel.findById @parentDoc._id, (err, doc) =>
+          return done(err) if err
+          assert.ok doc, 'should have found doc with encrypted children'
+
+          doc.children.addToSet text: 'new child'
+
+          doc.save (err) =>
+            return done(err) if err
+
+            @ParentModel.findById @parentDoc._id
+            .exec (err, doc) =>
+              return done(err) if err
+              assert.ok doc, 'should have found doc with encrypted children'
+              assert.equal doc.children.length, 3
+
+              done()
+
   describe 'when child and parent are encrypted', ->
     before ->
       ChildModelSchema = mongoose.Schema
@@ -1608,21 +1687,52 @@ describe 'period in field name in options', ->
     NestedModelSchema = mongoose.Schema
       nest:
         secretBird: type: String
+        secretBird2: type: String
+        publicBird: type: String
 
-    NestedModelSchema.plugin encrypt, encryptionKey: encryptionKey, signingKey: signingKey, collectionId: 'EncryptedFields', encryptedFields: ['nest.secretBird']
+    NestedModelSchema.plugin encrypt, encryptionKey: encryptionKey, signingKey: signingKey, collectionId: 'EncryptedFields', encryptedFields: ['nest.secretBird', 'nest.secretBird2'], additionalAuthenticatedFields: ['nest.publicBird']
 
     NestedModel = mongoose.model 'Nested', NestedModelSchema
 
     nestedDoc = new NestedModel
-      nest: secretBird: 'Unencrypted text'
+      nest:
+        secretBird: 'Unencrypted text'
+        secretBird2: 'Unencrypted text 2'
+        publicBird: 'Unencrypted text 3'
 
     nestedDoc.encrypt (err) ->
       assert.equal err, null
       assert.equal nestedDoc.nest.secretBird, undefined
+      assert.equal nestedDoc.nest.secretBird2, undefined
+      assert.equal nestedDoc.nest.publicBird, 'Unencrypted text 3'
 
       nestedDoc.decrypt (err) ->
         assert.equal err, null
         assert.equal nestedDoc.nest.secretBird, 'Unencrypted text'
+        assert.equal nestedDoc.nest.secretBird2, 'Unencrypted text 2'
+        assert.equal nestedDoc.nest.publicBird, 'Unencrypted text 3'
+        done()
+
+  it 'should encrypt nested fields with dot notation two layers deep', (done) ->
+    NestedModelSchema = mongoose.Schema
+      nest:
+        secretBird:
+          topSecretEgg: type: String
+
+    NestedModelSchema.plugin encrypt, encryptionKey: encryptionKey, signingKey: signingKey, collectionId: 'EncryptedFields', encryptedFields: ['nest.secretBird.topSecretEgg']
+
+    NestedModel = mongoose.model 'NestedNest', NestedModelSchema
+
+    nestedDoc = new NestedModel
+      nest: secretBird: topSecretEgg: 'Unencrypted text'
+
+    nestedDoc.encrypt (err) ->
+      assert.equal err, null
+      assert.equal nestedDoc.nest.secretBird.topSecretEgg, undefined
+
+      nestedDoc.decrypt (err) ->
+        assert.equal err, null
+        assert.equal nestedDoc.nest.secretBird.topSecretEgg, 'Unencrypted text'
         done()
 
 describe 'saving same authenticated document twice asynchronously', ->

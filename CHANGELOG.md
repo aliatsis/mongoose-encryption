@@ -1,4 +1,23 @@
 # Release Notes
+
+## v.1.3.0
+2015-12-13
+- Add support for addressing nested fields in options using dot notation
+
+## v.1.2.3
+2015-11-29
+- Change Mongoose to peer dependency
+- Check for compatibility with Node and Mongoose versions
+
+## v.1.2.2
+2015-11-4
+- Fix buffer handling for Node 4.x compatibility
+
+
+## v.1.2.1
+2015-8-31
+- Fix authentication when adding or removing a child from a subcollection
+
 ## v.1.2.0
 2015-08-16
 - Update tests to be Mongoose 4.x compatible
