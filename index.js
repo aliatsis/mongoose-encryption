@@ -69,8 +69,8 @@
     }
   };
 
-  var forEachSubDoc = function(doc, callback) {
-    _.keys(doc.schema.paths).some(function(path) {
+  var decryptSubDocs = function(doc) {
+    _.keys(doc.schema.paths).forEach(function(path) {
       if (path === '_id' || path === '__v') {
         return;
       }
@@ -79,24 +79,10 @@
 
       if (nestedDoc) {
         if (isSingleNestedDocument(nestedDoc)) {
-          var cbResult = callback(nestedDoc);
-          
-          decryptSubDocs(nestedDoc);
-
-          return cbResult;
+          maybeDecryptSync(nestedDoc);
         } else if (nestedDoc[0] && isEmbeddedDocument(nestedDoc[0])) {
-          return nestedDoc.some(callback);
+          nestedDoc.forEach(maybeDecryptSync);
         }
-      }
-    });
-  };
-
-  var decryptSubDocs = function(doc) {
-    forEachSubDoc(doc, function(nestedDoc) {
-      maybeDecryptSync(nestedDoc);
-
-      if (isSingleNestedDocument(nestedDoc)) {
-        decryptSubDocs(nestedDoc);
       }
     });
   };
@@ -399,18 +385,8 @@
 
     // Middleware //
 
-    var preInit = function(next, data) {
-          if (isSingleNestedDocument(this)) {
-            forEachSubDoc(this, function(nestedDoc) {
-              preInit.call(nestedDoc, function(err) {
-                if (err) {
-                  next(err);
-                  return true; // break out
-                }
-              }, nestedDoc._doc);
-            });
-          }
-
+    if (options.middleware) { // defaults to true
+      schema.pre('init', function(next, data) {
           var err = null;
           try { // this hook must be synchronous for embedded docs, so everything is synchronous for code simplicity
             if (!isEmbeddedDocument(this)){ // don't authenticate embedded docs because there's no way to handle the error appropriately
@@ -440,20 +416,9 @@
           } else {
             return next(err);
           }
-      }
+      });
 
-      var preSave = function(next) {
-        if (isSingleNestedDocument(this)) {
-          forEachSubDoc(this, function(nestedDoc) {
-            preSave.call(nestedDoc, function(err) {
-              if (err) {
-                next(err);
-                return true; // break out
-              }
-            });
-          });
-        }
-
+      schema.pre('save', function(next) {
         var that = this;
         if (this.isNew || this.isSelected('_ct') ){
           that.encrypt(function(err){
@@ -480,27 +445,23 @@
         } else {
           next();
         }
-      }
-
-      var postSave = function(doc) {
-        maybeDecryptSync(doc.decryptSync);
-
-        // Until 3.8.6, Mongoose didn't trigger post save hook on EmbeddedDocuments,
-        // instead had to call decrypt on all subDocs.
-        // ref https://github.com/LearnBoost/mongoose/issues/915
-
-        decryptSubDocs(doc);
-
-        return doc;
-      }
-
-    if (options.middleware) { // defaults to true
-      schema.pre('init', preInit);
-      schema.pre('save', preSave);
+      });
 
 
       if (options.decryptPostSave) { // true by default
-        schema.post('save', postSave);
+        schema.post('save', function(doc) {
+          if (_.isFunction(doc.decryptSync)) {
+            doc.decryptSync();
+          }
+
+          // Until 3.8.6, Mongoose didn't trigger post save hook on EmbeddedDocuments,
+          // instead had to call decrypt on all subDocs.
+          // ref https://github.com/LearnBoost/mongoose/issues/915
+
+          decryptSubDocs(doc);
+
+          return doc;
+        });
       }
     }
 
