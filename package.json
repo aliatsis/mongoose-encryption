@@ -34,7 +34,7 @@
     "semver": "5.1.x"
   },
   "peerDependencies": {
-    "mongoose": ">=3.8.28",
+    "mongoose": "4.3.2-pre",
     "mpath": "~0.2.1",
     "underscore": "1.5.x"
   },
