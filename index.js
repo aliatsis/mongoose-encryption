@@ -63,12 +63,6 @@
     return buf256;
   };
 
-  var maybeDecryptSync = function(doc) {
-    if (_.isFunction(doc.decryptSync)){
-      doc.decryptSync();
-    }
-  };
-
   var decryptEmbeddedDocs = function(doc) {
     _.keys(doc.schema.paths).forEach(function(path) {
       if (path === '_id' || path === '__v') {
@@ -79,7 +73,7 @@
 
       if (nestedDoc && nestedDoc[0] && isEmbeddedDocument(nestedDoc[0])) {
         nestedDoc.forEach(function(subDoc) {
-          if (_.isFunction(subDoc.decryptSync)) {
+          if (_.isFunction(subDoc.decryptSync)){
             subDoc.decryptSync();
           }
         });
